@@ -332,9 +332,19 @@ func (b *bobBackend) Execute(ctx context.Context, prompt string, opts ExecOption
 			select {
 			case result := <-promptDone:
 				c.mergeUsage(result.usage)
-				if result.stopReason == "cancelled" {
+				switch result.stopReason {
+				case "cancelled":
 					finalStatus = "aborted"
 					finalError = "execution cancelled"
+				case "max_tokens":
+					finalStatus = "failed"
+					finalError = "bob reached its maximum generated tokens (max_tokens)"
+				case "max_turn_requests":
+					finalStatus = "failed"
+					finalError = "bob reached its maximum turn requests (max_turn_requests)"
+				case "refusal":
+					finalStatus = "failed"
+					finalError = "bob refused to continue the prompt (refusal)"
 				}
 			default:
 			}

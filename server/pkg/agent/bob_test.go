@@ -316,6 +316,52 @@ func TestBobSessionLoadNotFoundRejectsResume(t *testing.T) {
 	}
 }
 
+// TestBobPromptStopReasons pins the four stop reasons Bob's ACP server can
+// report at the end of session/prompt. Only "cancelled" leaves the turn
+// resumable (aborted); the other three protocol limits end the RPC
+// successfully but did not complete the task, so they must surface as a
+// clear failure rather than silently reporting Status: "completed" — see
+// mcode.go's "cancelled"/"max_turn_requests" handling and grok.go's fuller
+// switch, which this mirrors with "refusal" added for Bob.
+func TestBobPromptStopReasons(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		reason     string
+		wantStatus string
+		wantError  string
+	}{
+		{"end_turn", "completed", ""},
+		{"cancelled", "aborted", "execution cancelled"},
+		{"max_tokens", "failed", "bob reached its maximum generated tokens (max_tokens)"},
+		{"max_turn_requests", "failed", "bob reached its maximum turn requests (max_turn_requests)"},
+		{"refusal", "failed", "bob refused to continue the prompt (refusal)"},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			t.Parallel()
+			script := strings.ReplaceAll(fakeBobACPScript(), `"stopReason":"end_turn"`, `"stopReason":"`+tc.reason+`"`)
+			bin := writeFakeBobScript(t, script)
+
+			b, err := New("bob", Config{ExecutablePath: bin, Logger: slog.Default()})
+			if err != nil {
+				t.Fatalf("New(bob) error: %v", err)
+			}
+			session, err := b.Execute(context.Background(), "test prompt", ExecOptions{Cwd: t.TempDir()})
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			for range session.Messages {
+			}
+			result := <-session.Result
+			if result.Status != tc.wantStatus || result.Error != tc.wantError {
+				t.Fatalf("status=%q error=%q, want status=%q error=%q", result.Status, result.Error, tc.wantStatus, tc.wantError)
+			}
+			if result.Output != "Bob completed the task" {
+				t.Fatalf("output=%q, want partial output preserved even on failure", result.Output)
+			}
+		})
+	}
+}
+
 func TestBobBackendUsage(t *testing.T) {
 	t.Parallel()
 	bin := writeFakeBobScript(t, fakeBobACPScript())
@@ -346,5 +392,59 @@ func TestBobBackendUsage(t *testing.T) {
 	}
 	if usage.InputTokens != 10 || usage.OutputTokens != 20 {
 		t.Fatalf("usage = %+v, want InputTokens=10 OutputTokens=20", usage)
+	}
+}
+
+// TestBobDoesNotInheritAmbientBobSession verifies that an ambient
+// BOB_SESSION in the daemon's own environment does not leak into the child:
+// Bob rejects a nested session under BOB_SESSION=1 unless --allow-nested is
+// passed, and Multica always launches Bob fresh. buildEnv -> mergeEnv must
+// filter it via isFilteredChildEnvKey.
+func TestBobDoesNotInheritAmbientBobSession(t *testing.T) {
+	t.Setenv("BOB_SESSION", "1")
+
+	envFile := filepath.Join(t.TempDir(), "env.txt")
+	script := fmt.Sprintf(`#!/bin/sh
+env > "%s"
+while IFS= read -r line; do
+  id=$(printf '%%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '{"jsonrpc":"2.0","id":%%s,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}}\n' "$id"
+      ;;
+    *'"method":"session/new"'*)
+      printf '{"jsonrpc":"2.0","id":%%s,"result":{"sessionId":"bob-session-env-check"}}\n' "$id"
+      ;;
+    *'"method":"session/prompt"'*)
+      printf '{"jsonrpc":"2.0","id":%%s,"result":{"stopReason":"end_turn"}}\n' "$id"
+      ;;
+    *)
+      printf '{"jsonrpc":"2.0","id":%%s,"error":{"code":-32601,"message":"method not found"}}\n' "$id"
+      ;;
+  esac
+done
+`, envFile)
+	bin := writeFakeBobScript(t, script)
+
+	b, err := New("bob", Config{ExecutablePath: bin, Logger: slog.Default()})
+	if err != nil {
+		t.Fatalf("New(bob) error: %v", err)
+	}
+	session, err := b.Execute(context.Background(), "test prompt", ExecOptions{Cwd: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for range session.Messages {
+	}
+	<-session.Result
+
+	raw, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatalf("read env: %v", err)
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if strings.HasPrefix(line, "BOB_SESSION=") {
+			t.Fatalf("bob child env leaked ambient BOB_SESSION: %q", line)
+		}
 	}
 }
