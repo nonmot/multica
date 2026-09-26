@@ -1,4 +1,5 @@
 agy
+bob
 claude
 codebuddy
 codearts
