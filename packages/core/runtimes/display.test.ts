@@ -121,6 +121,13 @@ describe("runtimeDisplayLabel", () => {
         provider: "zeroclaw",
       }),
     ).toBe("box (ZeroClaw)");
+    expect(
+      runtimeDisplayLabel({
+        name: "IBM Bob (host)",
+        custom_name: "box",
+        provider: "bob",
+      }),
+    ).toBe("box (IBM Bob)");
   });
 
   it("first-letter-capitalizes non-overridden slugs, matching the daemon", () => {
