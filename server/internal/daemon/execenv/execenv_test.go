@@ -1222,6 +1222,19 @@ func TestMcodeUsesNativeProjectSkillRoot(t *testing.T) {
 	}
 }
 
+// TestBobUsesNativeProjectSkillRoot pins the literal project-level skills root
+// Bob reads. TestReuseSkillRefreshIsCanonicalAcrossProviders derives the dir
+// from skillsDirPath itself, so it stays green if the path constant changes;
+// only an assertion on the literal catches that.
+func TestBobUsesNativeProjectSkillRoot(t *testing.T) {
+	t.Parallel()
+	workDir := t.TempDir()
+	want := filepath.Join(workDir, ".bob", "skills")
+	if got := skillsDirPath(workDir, "bob"); got != want {
+		t.Fatalf("skillsDirPath(bob) = %q, want %q", got, want)
+	}
+}
+
 func TestCleanupPreservesLogs(t *testing.T) {
 	t.Parallel()
 	workspacesRoot := t.TempDir()
