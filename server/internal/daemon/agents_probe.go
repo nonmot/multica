@@ -331,6 +331,13 @@ var probeAgentCLIs = func() map[string]AgentEntry {
 	if e, ok := probe("MULTICA_ZEROCLAW_PATH", "zeroclaw", ""); ok {
 		agents["zeroclaw"] = e
 	}
+	// IBM Bob (`bob`) is driven over ACP via `bob acp --trust`. It takes no
+	// model env var: Bob has no -m/--model flag and no session/set_model RPC,
+	// so ExecOptions.Model is ignored — see ModelSelectionSupported. Reading
+	// one here would only advertise a knob that silently does nothing.
+	if e, ok := probe("MULTICA_BOB_PATH", "bob", ""); ok {
+		agents["bob"] = e
+	}
 	return agents
 }
 
