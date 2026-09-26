@@ -1,0 +1,60 @@
+---
+title: IBM Bob エージェント対応の調査
+description: IBM の社内 AI コーディングアシスタント「Bob（Bob-Shell）」を Multica の対応エージェントに追加するための調査メモ。
+---
+
+このページは、IBM 社内向け AI コーディングアシスタント「Bob」を Multica の対応エージェントに追加する際の調査結果を記録した開発メモです。実装済みの内容ではなく、着手前に確認した事実と未確定事項をまとめたものです。関連 Issue: [MYP-367](https://github.com/nonmot/multica/issues) （GitHub Issue を参照）。
+
+## IBM Bob とは
+
+IBM 社内向けの AI コーディングアシスタント。IDE 拡張（Bob IDE、Roo Code/Cline のフォーク）と、ヘッドレスで動かせる CLI 版「**Bob-Shell**」（コマンドは `bob`）がある。中身は LiteLLM 経由で Claude 系モデルを呼び出しており、`AGENTS.md` を階層的にコンテキストファイルとして読む点は Multica 自身の規約と一致している。Multica のエージェント統合先としては CLI 版 Bob-Shell が対象になる。
+
+Bob-Shell の非対話モードは次の形:
+
+```
+bob -p "<prompt>" [-m <model>] [--yolo] [--approval-mode=auto_edit] [--allowed-tools="..."] [--checkpointing] [--include-directories=...] [--hide-intermediary-output]
+```
+
+認証は `BOBSHELL_API_KEY`（利用には w3publisher/bob での事前登録が必要）。
+
+## Multica 側の「新エージェント追加」の型
+
+既存の 25 種類のエージェント（claude, codex, opencode, codearts, qwenpaw, zeroclaw, dim, mcode …）を見ると、追加は毎回ほぼ同じチェックリストをなぞっている（直近の追加例: `codearts` = migration 441、`zeroclaw` = migration 403 などから逆算）。変更点は次の一箇所に集約されている。
+
+1. **バックエンド実装**: `server/pkg/agent/bob.go` を新規作成し、`Backend` インターフェース（`Execute(ctx, prompt, ExecOptions) (*Session, error)`）を実装。CLI の出力形式に応じて既存の実装パターンのどれかを踏襲する（後述の要確認事項参照）。
+2. **登録**: `server/pkg/agent/agent.go` の `SupportedTypes`、`launchHeaders` マップ、`New()` の switch に `"bob"` を追加。
+3. **DB マイグレーション**: `server/migrations/NNN_runtime_profile_add_bob.{up,down}.sql` で `runtime_profile_protocol_family_check` の CHECK 制約に `'bob'` を追加（`NOT VALID` で追加するのが既存の作法）。
+4. **デーモン側の配線**（`server/internal/daemon/`）:
+   - `agents_probe.go` — `MULTICA_BOB_PATH` / PATH 上の `bob` バイナリ検出ロジックを追加
+   - `config.go` — `Agents` map のコメント、エラーメッセージの一覧、`defaultAgentCommandNames` 相当のリストに `bob` を追加
+   - `daemon.go` — 表示名マップ（例: `"bob": "IBM Bob"`）、SessionID scrape 系の例外リストなど、必要なら追加
+   - `execenv/context.go`, `execenv/runtime_config.go` — コンテキストファイル名（`AGENTS.md` は既存の共通ケースに乗せられる可能性が高い）とスキル探索ディレクトリ（Bob-Shell は `~/.bob/AGENTS.md` を見るので `.bob/skills/` 相当を検討）
+   - `local_skills.go` — スキル配置先ディレクトリのケース追加
+5. **モデル一覧**（必要なら）: `server/internal/handler/runtime_models.go`
+6. **フロントエンド**:
+   - `packages/core/types/agent.ts` の `RUNTIME_PROFILE_PROTOCOL_FAMILIES` に `"bob"` を追加
+   - `packages/core/runtimes/display.ts` に表示名オーバーライド（デフォルト大文字化で足りなければ）
+   - `packages/views/runtimes/components/provider-logo.tsx` にロゴ追加
+   - MCP サーバー設定をパススルーするなら `packages/core/agents/mcp-support.ts` の `MCP_SUPPORTED_PROVIDERS` に追加
+7. **ドキュメント**: `apps/docs/content/docs/providers.mdx`（およびその `.ja/.ko/.fr/.zh.mdx` 翻訳）の対応表、`install-agent-runtime.mdx`（+翻訳）にインストール手順を追加。
+8. **テスト**: `server/pkg/agent/bob_test.go` を新規作成、`agent_supported_types_test.go` の一覧を更新、`scripts/agent-cli-command-names.txt` に `bob` を追加（デフォルトのテストは実在する CLI を実行しない規約があるため）。
+
+## 実装前に必ず確認すべき未確定事項
+
+社内ドキュメント（Bob docs / Slack `bob-and-friends`）を調べた範囲では、下記が確認できなかった。これらは Multica のバックエンド実装方式（既存のどのパターンを踏襲すべきか）を決める前提になるので、実際に `bob` バイナリを用意して手元で検証する必要がある。
+
+- **構造化出力の有無**: `bob -p "..."` が JSON/stream-json のような機械可読な出力モードを持つか。Claude/Codex/OpenCode 系はこれを前提にツール呼び出し単位のイベントをパースしている。もし Bob-Shell がプレーンテキストしか返さないなら、`dsh.go`/`grok.go` のような JSON-RPC/ACP 系ではなく、より単純な「起動して最終テキストだけ拾う」実装（`copilot.go` や `antigravity.go` に近い、テキストスクレイピング寄りのパターン）を選ぶことになる。まず `bob --help` と実際の `-p` 出力を確認するのが最優先。
+- **セッション再開**: `--resume` 相当のフラグやセッション ID の出力があるか（`ExecOptions.ResumeSessionID` / `Result.SessionID` を実装できるかに直結）。ドキュメント上は確認できず。
+- **モデル一覧の非対話取得**: `bob --list-models` 相当があるか、それとも組織設定で固定（"Premium"/"pro-latest" のような抽象名）か。QwenPaw/MiniMax のように「Multica からモデル選択不可、ランタイム管理」扱いにする可能性もある。
+- **MCP 設定の渡し方**: `--mcp-config` 相当のフラグやファイルベースの設定があるか。
+- **認証・利用登録**: Bob は IBMid ベースのサブスクリプション登録が必須（w3publisher/bob 経由、承認まで最短 1 日）で `BOBSHELL_API_KEY` をシークレットストアに保存する運用。Multica のデーモンをヘッドレスで動かすホスト（CI/サーバー）でこの登録・鍵配布をどう行うかは、コードの話ではなく社内の利用申請・ライセンス上の前提条件として別途確認が必要。
+- **承認モードのマッピング**: Bob の `--yolo` / `--approval-mode` / `--allowed-tools` を Multica 側のツール承認モデルにどう対応させるか（他エージェントの `--yolo` 系フラグの扱いを流用できるはず）。
+
+## 次のアクション（提案）
+
+1. Bob-Shell を実機にインストールし、`bob --help` と `bob -p "..."` の実際の出力形式を確認する（上記の未確定事項を解消）。
+2. 出力形式が判明したら、最も近い既存バックエンド（構造化 JSON なら `qwen.go`/`opencode.go` 系、プレーンテキストなら `copilot.go`/`antigravity.go` 系）をベースに `server/pkg/agent/bob.go` を実装。
+3. 上記チェックリストの各ファイルを一括で更新し、`agent_supported_types_test.go` 等の既存テストが新エージェントを検出できることを確認。
+4. ドキュメント（`providers.mdx` 系・`install-agent-runtime.mdx` 系、多言語含む）を更新。
+
+現時点では調査までを完了。実装に進む場合は 1. の実機確認から着手するのが最短ルート。
