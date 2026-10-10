@@ -28,6 +28,7 @@ var MinVersions = map[string]string{
 	"devin":       "3000.3.22", // devin acp --model was introduced in 3000.3.22
 	"zeroclaw":    "0.8.0",     // persistent ACP sessions and session/resume were added in 0.8.0
 	"zcode":       "0.16.0",    // native NDJSON app-server protocol
+	"bob":         "2.0.5",   // bob acp --trust and its loadSession:true handshake verified against 2.0.5
 	// opencode: honors TMPDIR/TMP/TEMP from 1.1.54. Earlier builds ignore all
 	// three when their embedded Bun runtime extracts a native module, writing
 	// into the shared system temp dir whatever the daemon exports — one 4-8 MB
