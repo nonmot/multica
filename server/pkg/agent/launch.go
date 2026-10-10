@@ -444,6 +444,7 @@ func isASCIIAlpha(ch byte) bool {
 // has no blocked-arg policy accepts any prefix.
 var launchPrefixBlockedArgs = map[string]map[string]blockedArgMode{
 	"antigravity": antigravityBlockedArgs,
+	"bob":         bobBlockedArgs,
 	"claude":      claudeBlockedArgs,
 	"codebuddy":   codebuddyBlockedArgs,
 	"codearts":    codeartsBlockedArgs,

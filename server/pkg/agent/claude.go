@@ -1299,9 +1299,10 @@ func mergeEnv(base []string, extra map[string]string) []string {
 }
 
 // isFilteredChildEnvKey reports whether an inherited env var is an internal
-// Claude Code runtime/session marker that must NOT leak into the spawned child
+// runtime/session marker that must NOT leak into the spawned child
 // (otherwise the child mistakes itself for a nested or resumed session, or
-// inherits the parent's exec path / transport).
+// inherits the parent's exec path / transport). It is shared by every
+// backend's buildEnv, not just Claude's.
 //
 // It must NOT strip the user-facing CLAUDE_CODE_* configuration namespace
 // (CLAUDE_CODE_GIT_BASH_PATH, CLAUDE_CODE_USE_BEDROCK, CLAUDE_CODE_USE_VERTEX,
@@ -1322,7 +1323,8 @@ func isFilteredChildEnvKey(key string) bool {
 		"CLAUDE_CODE_ENTRYPOINT", // entrypoint marker (cli/sdk-cli/...)
 		"CLAUDE_CODE_EXECPATH",   // path to the running CLI binary
 		"CLAUDE_CODE_SESSION_ID", // per-session identifier
-		"CLAUDE_CODE_SSE_PORT":   // IDE-extension transport port
+		"CLAUDE_CODE_SSE_PORT",   // IDE-extension transport port
+		"BOB_SESSION":            // "1" when running inside a Bob session; Bob rejects a nested session unless --allow-nested is set
 		return true
 	}
 	// CLAUDECODE_* (no underscore between CLAUDE and CODE) is wholly internal;

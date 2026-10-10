@@ -25,6 +25,7 @@ var MinVersions = map[string]string{
 	"dim":         "0.3.10",  // cross-run session/load: per-process lock releases on graceful exit
 	"mcode":       "0.1.2",   // ACP v1 session/new, prompt, MCP capability forwarding
 	"zeroclaw":    "0.8.0",   // persistent ACP sessions and session/resume were added in 0.8.0
+	"bob":         "2.0.5",   // bob acp --trust and its loadSession:true handshake verified against 2.0.5
 	// opencode: honors TMPDIR/TMP/TEMP from 1.1.54. Earlier builds ignore all
 	// three when their embedded Bun runtime extracts a native module, writing
 	// into the shared system temp dir whatever the daemon exports — one 4-8 MB
