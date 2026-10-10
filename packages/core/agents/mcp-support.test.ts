@@ -7,6 +7,10 @@ describe("providerSupportsMcpConfig", () => {
     expect(providerSupportsMcpConfig("claude")).toBe(true);
     expect(providerSupportsMcpConfig("devin")).toBe(true);
     expect(providerSupportsMcpConfig("zcode")).toBe(true);
+    // Bob's ACP handshake reports mcpCapabilities and Execute forwards
+    // ExecOptions.McpConfig via buildACPMcpServers, same as the other ACP
+    // backends in this list.
+    expect(providerSupportsMcpConfig("bob")).toBe(true);
   });
   it("rejects providers whose runtime ignores mcp_config", () => {
     expect(providerSupportsMcpConfig("antigravity")).toBe(false);

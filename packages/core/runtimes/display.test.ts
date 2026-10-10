@@ -128,6 +128,11 @@ describe("runtimeDisplayLabel", () => {
         provider: "zcode",
       }),
     ).toBe("box (ZCode)");
+        name: "IBM Bob (host)",
+        custom_name: "box",
+        provider: "bob",
+      }),
+    ).toBe("box (IBM Bob)");
   });
 
   it("first-letter-capitalizes non-overridden slugs, matching the daemon", () => {

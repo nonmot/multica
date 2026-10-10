@@ -30,6 +30,7 @@ const MCP_SUPPORTED_PROVIDERS = new Set([
   "dim",
   "omp",
   "zcode",
+  "bob",
 ]);
 
 export function providerSupportsMcpConfig(provider: string | undefined | null): boolean {
