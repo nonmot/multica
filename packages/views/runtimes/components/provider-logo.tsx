@@ -376,6 +376,23 @@ function ZeroClawLogo({ className }: { className: string }) {
   );
 }
 
+// IBM Bob — no official brand asset has been sourced for this runtime yet, so
+// this is a deliberately simple placeholder mark (a "B" monogram tile) rather
+// than a claimed "official" logo. currentColor keeps it legible in both
+// themes; swap for a real asset once IBM ships one, following the DimLogo
+// <img> pattern.
+function BobLogo({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <rect width="24" height="24" rx="5" fill="currentColor" fillOpacity="0.12" />
+      <path
+        d="M7.6 6.4h4.3c2.1 0 3.4 1 3.4 2.7 0 1.2-.7 2-1.6 2.3 1.1.3 1.9 1.2 1.9 2.6 0 1.9-1.4 3-3.6 3H7.6V6.4zm2 2v2.6h2c1 0 1.6-.5 1.6-1.3 0-.8-.6-1.3-1.6-1.3h-2zm0 4.5v2.7h2.2c1.1 0 1.8-.5 1.8-1.4 0-.8-.7-1.3-1.8-1.3h-2.2z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export function ProviderLogo({
   provider,
   className = "h-4 w-4",
@@ -435,6 +452,8 @@ export function ProviderLogo({
       return <DimLogo className={className} />;
     case "zeroclaw":
       return <ZeroClawLogo className={className} />;
+    case "bob":
+      return <BobLogo className={className} />;
     default:
       return <Monitor className={className} />;
   }

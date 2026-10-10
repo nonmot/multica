@@ -5,6 +5,10 @@ import { providerSupportsMcpConfig } from "./mcp-support";
 describe("providerSupportsMcpConfig", () => {
   it("accepts a provider whose runtime consumes mcp_config", () => {
     expect(providerSupportsMcpConfig("claude")).toBe(true);
+    // Bob's ACP handshake reports mcpCapabilities and Execute forwards
+    // ExecOptions.McpConfig via buildACPMcpServers, same as the other ACP
+    // backends in this list.
+    expect(providerSupportsMcpConfig("bob")).toBe(true);
   });
   it("rejects providers whose runtime ignores mcp_config", () => {
     expect(providerSupportsMcpConfig("antigravity")).toBe(false);
