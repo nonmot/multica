@@ -256,6 +256,11 @@ func localSkillRootsForProvider(provider string) ([]localSkillRoot, bool, error)
 			providerRoot = filepath.Join(configHome, "muse", "skills")
 		case "zcode":
 			providerRoot = filepath.Join(home, ".zcode", "skills")
+		case "bob":
+			// IBM Bob's global skills live under ~/.bob/skills (verified against
+			// 2.0.5). Project skills are injected separately under
+			// <workDir>/.bob/skills.
+			providerRoot = filepath.Join(home, ".bob", "skills")
 		default:
 			return nil, false, nil
 		}

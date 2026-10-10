@@ -165,6 +165,7 @@ var allFileBasedProviders = []string{
 	"qwen",
 	"qwenpaw",
 	"mcode",
+	"bob",
 }
 
 // TestPrepareThenCleanupSidecarsRoundTripEmptyWorkdir is the headline

@@ -423,6 +423,10 @@ func skillsDirPath(workDir, provider string) string {
 	case "muse":
 		// Muse's native project root: https://meta-models.github.io/muse-code-sdk/next/guides/extend/skills/
 		return filepath.Join(workDir, ".agents", "skills")
+	case "bob":
+		// IBM Bob discovers project-level skills from .bob/skills/<name>/SKILL.md
+		// (verified against 2.0.5). Priority order is .bob > .agents > .claude.
+		return filepath.Join(workDir, ".bob", "skills")
 	case "traecli":
 		// Official TRAE CLI discovers project-level skills from .traecli/skills/
 		// in the workdir (global skills live in ~/.traecli/skills). See
