@@ -45,6 +45,7 @@ Multica 不会替代你使用的 AI 编程工具。运行时会调用电脑上�
 | Reasonix | `reasonix` | ✓ | ✓ | `.reasonix/skills/` |
 | Trae CLI | `traecli` | ✓ | ✓ | `.traecli/skills/` |
 | Dim | `dim` | ✓ | ✓ | — |
+| IBM Bob | `bob` | ✓ | ✓ | `.bob/skills/` |
 
 "Multica 管理 MCP" 表示你可以在智能体配置中填写 MCP server，由 Multica 在执行前传给对应工具。它不代表该工具本身没有其他 MCP 配置方式。
 
@@ -54,7 +55,9 @@ Multica 不会替代你使用的 AI 编程工具。运行时会调用电脑上�
 
 不选择模型时，Multica 使用该工具的默认设置。列表为空时，先确认运行时在线并且工具已经登录，再刷新模型列表。
 
-QwenPaw 和 MiniMax Code 是例外：它们不接受在 Multica 侧选择的模型，因此选择框不可用，显示为"由运行时管理"。请改在工具自身的配置里选择模型。模型列表为空属于正常情况，并不表示运行时离线。
+QwenPaw、MiniMax Code 和 IBM Bob 是例外：它们不接受在 Multica 侧选择的模型，因此选择框不可用，显示为"由运行时管理"。请改在工具自身的配置里选择模型。模型列表为空属于正常情况，并不表示运行时离线。IBM Bob 没有 `-m`/`--model` 参数，它的 ACP 会话也不支持切换模型，所以本来就没有模型列表可以显示。
+
+IBM Bob 还要求在守护进程启动前设置环境变量 `BOB_API_KEY`；注册 IBMid 和获取密钥本身不在 Multica 的范围内。
 
 DeepSeek Harness 的模型目录由运行时自身提供（`dsh --profile multica --list-models`）。它的模型 id 采用 `provider/model` 形式（例如 `deepseek-official/deepseek-chat`），请从列表中选择完整 id。
 

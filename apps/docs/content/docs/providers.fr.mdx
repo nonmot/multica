@@ -45,6 +45,7 @@ Les étapes d'installation se trouvent dans [Installer les outils de codage IA](
 | Reasonix | `reasonix` | ✓ | ✓ | `.reasonix/skills/` |
 | Trae CLI | `traecli` | ✓ | ✓ | `.traecli/skills/` |
 | Dim | `dim` | ✓ | ✓ | — |
+| IBM Bob | `bob` | ✓ | ✓ | `.bob/skills/` |
 
 « MCP géré par Multica » signifie que vous pouvez définir des serveurs MCP dans la configuration de l'agent et que Multica les transmet à l'outil avant une exécution. Cela ne signifie pas que l'outil n'a pas d'autre moyen de configurer MCP.
 
@@ -54,7 +55,9 @@ Lorsque vous créez un agent, la liste des modèles provient du runtime correspo
 
 Si vous ne choisissez pas de modèle, Multica utilise le modèle par défaut de l'outil. Si la liste est vide, vérifiez que le runtime est en ligne et que l'outil est connecté, puis actualisez la liste des modèles.
 
-QwenPaw et MiniMax Code font exception : ils n'acceptent pas de modèle choisi depuis Multica, donc le sélecteur est inactif et affiche « Géré par le runtime ». Choisissez plutôt le modèle dans la configuration propre à l'outil. Une liste de modèles vide y est normale et n'indique pas que le runtime est hors ligne.
+QwenPaw, MiniMax Code et IBM Bob font exception : ils n'acceptent pas de modèle choisi depuis Multica, donc le sélecteur est inactif et affiche « Géré par le runtime ». Choisissez plutôt le modèle dans la configuration propre à l'outil. Une liste de modèles vide y est normale et n'indique pas que le runtime est hors ligne. IBM Bob n'a pas d'option `-m`/`--model` et sa session ACP ne prend pas en charge le changement de modèle, donc il n'existe simplement aucune liste de modèles à afficher.
+
+IBM Bob nécessite également la variable d'environnement `BOB_API_KEY` avant que le daemon puisse le démarrer ; l'enregistrement d'un IBMid et l'obtention de la clé se font en dehors de Multica.
 
 DeepSeek Harness publie son catalogue de modèles depuis le runtime lui-même (`dsh --profile multica --list-models`). Ses identifiants de modèle utilisent la forme `provider/model` (par exemple `deepseek-official/deepseek-chat`) ; sélectionnez donc l'identifiant complet dans la liste.
 
