@@ -44,7 +44,11 @@ import { contentReferencesAttachment } from "@multica/core/types";
 import { isDeletedComment } from "@multica/core/issues/comment-deletion";
 import { commentSupplementReceipts, isSupplementInFlight } from "@multica/core/issues/run-steering";
 import { useConfigStore } from "@multica/core/config";
-import { selectStandaloneAttachments } from "@multica/core/attachments/image-sequence";
+import {
+  orderStandaloneAttachments,
+  selectStandaloneAttachments,
+  standaloneAttachmentGroup,
+} from "@multica/core/attachments/image-sequence";
 import { useCommentCollapseStore, useCommentDraftStore } from "@multica/core/issues/stores";
 import { useT } from "../../i18n";
 import { CommentsFoldBar } from "./resolved-thread-bar";
@@ -54,7 +58,10 @@ import { InlineCommentRun, PlacedInlineCommentRun, useInlineCommentRunState, typ
 import { EMPTY_COMMENT_RUNS, isRunFailureNotice, orderThreadWithRuns, type CommentRun, type ThreadRunSlot } from "./comment-runs";
 import { descriptionPreview } from "./description-preview";
 import { useCommentAnnotations } from "./use-comment-annotations";
+import { useAttachmentVersions } from "./deliverables/attachment-versions";
+import { VersionBadge } from "./deliverables/version-badge";
 import { useRunCommentMotion } from "./use-run-comment-motion";
+import { WakeupSourceChip } from "./wakeup-source-chip";
 
 const commentActionClassName =
   "text-muted-foreground aria-expanded:bg-transparent aria-expanded:hover:bg-muted dark:aria-expanded:hover:bg-muted/50";
@@ -97,9 +104,7 @@ function StickyHeaderShell({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 
 interface CommentCardProps {
   issueId: string;
@@ -153,9 +158,7 @@ interface CommentCardProps {
   highlightedCommentId?: string | null;
 }
 
-// ---------------------------------------------------------------------------
 // Shared delete confirmation dialog
-// ---------------------------------------------------------------------------
 
 function DeleteCommentDialog({
   open,
@@ -196,9 +199,7 @@ function DeleteCommentDialog({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Standalone attachment list — renders attachments not already in the markdown
-// ---------------------------------------------------------------------------
 
 export function AttachmentList({
   attachments,
@@ -211,25 +212,49 @@ export function AttachmentList({
   className?: string;
   onRemove?: (attachmentId: string) => void;
 }) {
+  const versions = useAttachmentVersions();
   if (!attachments?.length) return null;
   // Skip attachments whose URL (stable or legacy) is already referenced in the
   // markdown content, and duplicates of the same file that are referenced.
   // Shared with the image-sequence builder (MUL-5752) so the cards rendered
-  // here and the images the viewer pages through can't disagree.
-  const standalone = selectStandaloneAttachments(content, attachments);
+  // here and the images the viewer pages through can't disagree — as is the
+  // grouping below, so paging follows the screen (MUL-7649).
+  const standalone = orderStandaloneAttachments(
+    selectStandaloneAttachments(content, attachments),
+  );
   if (!standalone.length) return null;
 
+  const images = standalone.filter((a) => standaloneAttachmentGroup(a) === "image");
+  const files = standalone.filter((a) => standaloneAttachmentGroup(a) === "file");
+  const render = (a: Attachment) => {
+    const version = versions?.get(a.id);
+    return (
+      <AttachmentRenderer
+        key={a.id}
+        attachment={{ kind: "record", attachment: a }}
+        layout="card"
+        badge={version ? <VersionBadge version={version} /> : undefined}
+        editable={!!onRemove}
+        onDelete={onRemove ? () => onRemove(a.id) : undefined}
+      />
+    );
+  };
+
+  // Every image shows at its full size, one under another, so it reads
+  // without opening (MUL-7736). Every other file — HTML too: an uploaded file
+  // is a deliverable to open, not part of the text — is a card in a grid, not
+  // a full-width row each.
   return (
     <AttachmentDownloadProvider attachments={attachments}>
-      <div className={cn("flex flex-col gap-1", className)}>
-        {standalone.map((a) => (
-          <AttachmentRenderer
-            key={a.id}
-            attachment={{ kind: "record", attachment: a }}
-            editable={!!onRemove}
-            onDelete={onRemove ? () => onRemove(a.id) : undefined}
-          />
-        ))}
+      <div className={cn("flex flex-col gap-2", className)}>
+        {images.length > 0 && (
+          <div className="flex flex-col items-start gap-2">{images.map(render)}</div>
+        )}
+        {files.length > 0 && (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(15rem,100%),1fr))] gap-2">
+            {files.map(render)}
+          </div>
+        )}
       </div>
     </AttachmentDownloadProvider>
   );
@@ -325,9 +350,7 @@ function TaskCommentRetryButton({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Shared edit-attachment state hook
-// ---------------------------------------------------------------------------
 
 const NEVER_STEER = () => false;
 
@@ -594,9 +617,7 @@ function CommentRevisionConflict({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Single comment row (used for both parent and replies within the same Card)
-// ---------------------------------------------------------------------------
 
 function CommentRow({
   runHeader,
@@ -699,6 +720,10 @@ function CommentRow({
 
         <SteerBadge issueId={issueId} entry={entry} />
         {runHeader}
+
+        {entry.actor_type === "agent" && entry.source_task_id && (
+          <WakeupSourceChip issueId={issueId} taskId={entry.source_task_id} />
+        )}
 
         {isResolution && (
           <span className="text-caption font-medium text-success">
@@ -964,9 +989,7 @@ export function AgentRunComment({ run, standalone = false, commentProps, enterin
   );
 }
 
-// ---------------------------------------------------------------------------
 // CommentCard — One Card per thread (parent + all replies flat inside)
-// ---------------------------------------------------------------------------
 
 // A quick action posts an ordinary comment and is rendered as one (MUL-5465).
 // It briefly had a collapsed one-line header that expanded to reveal the
@@ -1204,6 +1227,9 @@ function CommentCardImpl({
 
                   <SteerBadge issueId={issueId} entry={entry} />
                   {renderRuns(entry.id, "header")}
+                  {entry.actor_type === "agent" && entry.source_task_id && (
+                    <WakeupSourceChip issueId={issueId} taskId={entry.source_task_id} />
+                  )}
                 </>
               )}
 

@@ -24,12 +24,17 @@ var modelPrices = map[string]ModelPrice{
 	// GPT-5.6 series and GPT-6 Astra (Codex `codex` provider). Official rates
 	// from OpenAI's GPT-5.6 announcement (openai.com/index/previewing-gpt-5-6-sol)
 	// and Astra's published $10 / $50. For 5.6+ (including Astra) cache read is
-	// the 90%-off cached-input rate (0.1x input) and cache write is billed at
-	// 1.25x the uncached input rate — unlike earlier OpenAI SKUs, which don't
+	// generally the 90%-off cached-input rate (0.1x input). Cache write is billed
+	// at 1.25x the uncached input rate — unlike earlier OpenAI SKUs, which don't
 	// bill cache writes separately. Codex app-server v0.147 reports cache-write
 	// input separately while including it in the raw input total; the collector
 	// normalizes those into mutually exclusive billing buckets.
-	"openai:gpt-6-astra":   {Provider: "openai", Model: "gpt-6-astra", InputPerM: 10.00, CacheReadPerM: 1.00, CacheWritePerM: 12.50, OutputPerM: 50.00},
+	"openai:gpt-6-astra": {Provider: "openai", Model: "gpt-6-astra", InputPerM: 10.00, CacheReadPerM: 1.00, CacheWritePerM: 12.50, OutputPerM: 50.00},
+	// Standard short-context rates from developers.openai.com/api/docs/models/.
+	// GPT-6.1 Sol caches at 0.05x input, not GPT-6 Sol's 0.1x.
+	"openai:gpt-6.1-sol":   {Provider: "openai", Model: "gpt-6.1-sol", InputPerM: 2.00, CacheReadPerM: 0.10, CacheWritePerM: 2.50, OutputPerM: 10.00},
+	"openai:gpt-6-sol":     {Provider: "openai", Model: "gpt-6-sol", InputPerM: 2.00, CacheReadPerM: 0.20, CacheWritePerM: 2.50, OutputPerM: 10.00},
+	"openai:gpt-6-luna":    {Provider: "openai", Model: "gpt-6-luna", InputPerM: 0.10, CacheReadPerM: 0.01, CacheWritePerM: 0.125, OutputPerM: 0.50},
 	"openai:gpt-5.6-sol":   {Provider: "openai", Model: "gpt-5.6-sol", InputPerM: 5.00, CacheReadPerM: 0.50, CacheWritePerM: 6.25, OutputPerM: 30.00},
 	"openai:gpt-5.6-terra": {Provider: "openai", Model: "gpt-5.6-terra", InputPerM: 2.50, CacheReadPerM: 0.25, CacheWritePerM: 3.125, OutputPerM: 15.00},
 	"openai:gpt-5.6-luna":  {Provider: "openai", Model: "gpt-5.6-luna", InputPerM: 1.00, CacheReadPerM: 0.10, CacheWritePerM: 1.25, OutputPerM: 6.00},
@@ -42,6 +47,11 @@ var modelPrices = map[string]ModelPrice{
 	// static table cannot schedule the published post-intro $3 / $15 change yet,
 	// so keep the intro rate here and update the row when catalog support exists.
 	"anthropic:claude-sonnet-5":   {Provider: "anthropic", Model: "claude-sonnet-5", InputPerM: 2.00, CacheReadPerM: 0.20, CacheWritePerM: 2.50, OutputPerM: 10.00},
+	"anthropic:claude-sonnet-5-5": {Provider: "anthropic", Model: "claude-sonnet-5-5", InputPerM: 2.00, CacheReadPerM: 0.10, CacheWritePerM: 2.50, OutputPerM: 10.00},
+	// Haiku 5.5 uses the <=100K prompt tier, matching the frontend estimate.
+	// Above 100K (including cache reads/writes), all four rates are 5x higher.
+	// Usage aggregates lack per-request prompt sizes, so long requests are underestimated.
+	"anthropic:claude-haiku-5-5":  {Provider: "anthropic", Model: "claude-haiku-5-5", InputPerM: 0.10, CacheReadPerM: 0.01, CacheWritePerM: 0.125, OutputPerM: 0.50},
 	"anthropic:claude-fable-5-1":  {Provider: "anthropic", Model: "claude-fable-5-1", InputPerM: 10.00, CacheReadPerM: 0.25, CacheWritePerM: 12.50, OutputPerM: 50.00},
 	"anthropic:claude-fable-5":    {Provider: "anthropic", Model: "claude-fable-5", InputPerM: 10.00, CacheReadPerM: 1.00, CacheWritePerM: 12.50, OutputPerM: 50.00},
 	"anthropic:claude-opus-5-5":   {Provider: "anthropic", Model: "claude-opus-5-5", InputPerM: 4.00, CacheReadPerM: 0.20, CacheWritePerM: 5.00, OutputPerM: 20.00},
@@ -144,6 +154,9 @@ var modelAliasRules = []struct {
 	// utils.ts does NOT dash-normalize, so a dashed `gpt-5-6-luna` must surface
 	// as unmapped on both sides rather than silently borrowing a tier here.
 	{regexp.MustCompile(`(^|/|:)gpt-6-astra$`), "openai:gpt-6-astra"},
+	{regexp.MustCompile(`(^|/|:)gpt-6\.1-sol$`), "openai:gpt-6.1-sol"},
+	{regexp.MustCompile(`(^|/|:)gpt-6-sol$`), "openai:gpt-6-sol"},
+	{regexp.MustCompile(`(^|/|:)gpt-6-luna$`), "openai:gpt-6-luna"},
 	{regexp.MustCompile(`(^|/|:)gpt-5\.6-sol$`), "openai:gpt-5.6-sol"},
 	{regexp.MustCompile(`(^|/|:)gpt-5\.6-terra$`), "openai:gpt-5.6-terra"},
 	{regexp.MustCompile(`(^|/|:)gpt-5\.6-luna$`), "openai:gpt-5.6-luna"},
@@ -152,7 +165,11 @@ var modelAliasRules = []struct {
 	{regexp.MustCompile(`(^|/|:)gpt-5[.-]4-mini($|[^a-z0-9])`), "openai:gpt-5.4-mini"},
 	{regexp.MustCompile(`(^|/|:)gpt-5[.-]3-codex$`), "openai:gpt-5.3-codex"},
 	{regexp.MustCompile(`(^|/|:)gpt-5[.-]2-codex$`), "openai:gpt-5.2-codex"},
-	{regexp.MustCompile(`claude-sonnet-5|claude-5-sonnet`), "anthropic:claude-sonnet-5"},
+	// Sonnet 5.5 halves Sonnet 5's cache-read rate. End both rules at their
+	// own version so later SKUs cannot inherit either tier.
+	{regexp.MustCompile(`claude-sonnet-5[-.]5` + claudeVersionEnd), "anthropic:claude-sonnet-5-5"},
+	{regexp.MustCompile(`(?:claude-sonnet-5|claude-5-sonnet)` + claudeVersionEnd), "anthropic:claude-sonnet-5"},
+	{regexp.MustCompile(`claude-haiku-5[-.]5` + claudeVersionEnd), "anthropic:claude-haiku-5-5"},
 	// Fable 5.1 shares Fable 5's $10 / $50 and $12.50 cache write but prices
 	// cache reads at 0.025x input ($0.25) instead of the standard 0.1x, so it
 	// needs its own row, and both rules end at their own version

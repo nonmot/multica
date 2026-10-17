@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -347,6 +348,15 @@ type TaskIssueStatusData struct {
 	Description string `json:"description,omitempty"`
 }
 
+// TaskProjectWorkflowData is the workflow of the project a task's issue
+// belongs to (MUL-7420), sent only when that workflow says more than the
+// runtime's status rules: a named workflow, or a Default that hands off.
+// Brief is the server-rendered text (issueworkflow.Brief); the daemon puts it
+// in the per-turn prompt, never in the cached runtime brief.
+type TaskProjectWorkflowData struct {
+	Brief string `json:"brief"`
+}
+
 // TaskCancellationActor is the point-in-time actor snapshot attached to a
 // cancelled run. Type stays open for forward compatibility; current producers
 // emit member, agent, or system.
@@ -396,31 +406,34 @@ type AgentTaskResponse struct {
 	// IssueStatusesOmitted is how many active custom statuses were dropped by
 	// the cap, so the brief can say the list is incomplete instead of
 	// presenting a truncated catalog as the whole one.
-	IssueStatusesOmitted int                   `json:"issue_statuses_omitted,omitempty"`
-	ThreadName           string                `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
-	Status               string                `json:"status"`
-	Priority             int32                 `json:"priority"`
-	DispatchedAt         *string               `json:"dispatched_at"`
-	StartedAt            *string               `json:"started_at"`
-	CompletedAt          *string               `json:"completed_at"`
-	Result               any                   `json:"result"`
-	Error                *string               `json:"error"`
-	FailureReason        string                `json:"failure_reason,omitempty"` // see TaskService.MaybeRetryFailedTask
-	Attempt              int32                 `json:"attempt"`
-	MaxAttempts          int32                 `json:"max_attempts"`
-	ParentTaskID         *string               `json:"parent_task_id,omitempty"`
-	IsLeaderTask         bool                  `json:"is_leader_task,omitempty"`
-	LeaderRoleResolved   bool                  `json:"leader_role_resolved,omitempty"` // claim-only capability, always true here: IsLeaderTask/SquadID authoritatively answer "is this a leader run", so the daemon must not infer the role from briefing text. Servers predating it make no such promise — before #4951 they sent no is_leader_task at all, after it they sent the flag without guaranteeing a briefing — so a daemon seeing no capability keeps the legacy inference. Never rendered into a prompt; see daemon.taskIsSquadLeader (MUL-5811). Mirror field: internal/daemon/types.go, same JSON name
-	Agent                *TaskAgentData        `json:"agent,omitempty"`
-	ConnectedApps        []ConnectedAppData    `json:"connected_apps,omitempty"` // daemon-claim only: per-run app capabilities mounted through runtime MCP overlays
-	Repos                []RepoData            `json:"repos,omitempty"`
-	ProjectID            string                `json:"project_id,omitempty"`          // issue's project, when present
-	ProjectTitle         string                `json:"project_title,omitempty"`       // for surfacing in agent context
-	ProjectDescription   string                `json:"project_description,omitempty"` // durable project-level context injected into the brief
-	ProjectResources     []ProjectResourceData `json:"project_resources,omitempty"`   // resources attached to the project
-	CreatedAt            string                `json:"created_at"`
-	PriorSessionID       string                `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
-	PriorWorkDir         string                `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on same issue
+	IssueStatusesOmitted int `json:"issue_statuses_omitted,omitempty"`
+	// ProjectWorkflow is the issue's project workflow, when it has one other
+	// than the Default (MUL-7420). Absent keeps the brief unchanged.
+	ProjectWorkflow    *TaskProjectWorkflowData `json:"project_workflow,omitempty"`
+	ThreadName         string                   `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
+	Status             string                   `json:"status"`
+	Priority           int32                    `json:"priority"`
+	DispatchedAt       *string                  `json:"dispatched_at"`
+	StartedAt          *string                  `json:"started_at"`
+	CompletedAt        *string                  `json:"completed_at"`
+	Result             any                      `json:"result"`
+	Error              *string                  `json:"error"`
+	FailureReason      string                   `json:"failure_reason,omitempty"` // see TaskService.MaybeRetryFailedTask
+	Attempt            int32                    `json:"attempt"`
+	MaxAttempts        int32                    `json:"max_attempts"`
+	ParentTaskID       *string                  `json:"parent_task_id,omitempty"`
+	IsLeaderTask       bool                     `json:"is_leader_task,omitempty"`
+	LeaderRoleResolved bool                     `json:"leader_role_resolved,omitempty"` // claim-only capability, always true here: IsLeaderTask/SquadID authoritatively answer "is this a leader run", so the daemon must not infer the role from briefing text. Servers predating it make no such promise — before #4951 they sent no is_leader_task at all, after it they sent the flag without guaranteeing a briefing — so a daemon seeing no capability keeps the legacy inference. Never rendered into a prompt; see daemon.taskIsSquadLeader (MUL-5811). Mirror field: internal/daemon/types.go, same JSON name
+	Agent              *TaskAgentData           `json:"agent,omitempty"`
+	ConnectedApps      []ConnectedAppData       `json:"connected_apps,omitempty"` // daemon-claim only: per-run app capabilities mounted through runtime MCP overlays
+	Repos              []RepoData               `json:"repos,omitempty"`
+	ProjectID          string                   `json:"project_id,omitempty"`          // issue's project, when present
+	ProjectTitle       string                   `json:"project_title,omitempty"`       // for surfacing in agent context
+	ProjectDescription string                   `json:"project_description,omitempty"` // durable project-level context injected into the brief
+	ProjectResources   []ProjectResourceData    `json:"project_resources,omitempty"`   // resources attached to the project
+	CreatedAt          string                   `json:"created_at"`
+	PriorSessionID     string                   `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
+	PriorWorkDir       string                   `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on same issue
 	// PriorSessionResumeUnavailable is set when a more recent Codex session was
 	// withheld because its rollout was missing (MUL-5305); PriorSessionID (if
 	// any) is then an older fallback, and the daemon surfaces the continuity gap
@@ -511,6 +524,8 @@ type AgentTaskResponse struct {
 	QuickCreateAttachmentIDs []string             `json:"quick_create_attachment_ids,omitempty"` // attachment ids uploaded in the quick-create prompt and bound on issue create
 	QuickCreateSourceContext json.RawMessage      `json:"quick_create_source_context,omitempty"` // immutable historical context for source-context quick-create
 	WakeupID                 string               `json:"wakeup_id,omitempty"`
+	WakeupSystemRule         string               `json:"wakeup_system_rule,omitempty"`      // set when a platform rule (e.g. child_done) started the run
+	WakeupJoined             string               `json:"wakeup_joined,omitempty"`           // wakeups that fired while this run waited to start and joined it instead of queuing their own
 	HandoffNote              string               `json:"handoff_note,omitempty"`            // legacy assignment handoff instruction retained for installed clients; rendered by the daemon only in the per-turn prompt
 	SquadID                  string               `json:"squad_id,omitempty"`                // for quick-create tasks where the picker was a squad; Agent is still the resolved leader
 	SquadName                string               `json:"squad_name,omitempty"`              // display name for the picker squad
@@ -777,6 +792,7 @@ type TaskAgentData struct {
 // Dispatch only begins preparation, so a fallback cancelled before StartTask
 // is still unused. Keep started fallbacks and ordinary cancellations visible,
 // and retain the underlying scheduling records for audit.
+// Keep this predicate in sync with ListAgentTasks in pkg/db/queries/agent.sql.
 func visibleTaskHistory(tasks []db.AgentTaskQueue) []db.AgentTaskQueue {
 	return slices.DeleteFunc(tasks, func(task db.AgentTaskQueue) bool {
 		return task.EscalationForTaskID.Valid &&
@@ -817,7 +833,8 @@ func taskToResponse(t db.AgentTaskQueue, workspaceID string) AgentTaskResponse {
 		branchName = t.BranchName.String
 	}
 	var wakeupContext struct {
-		ID string `json:"wakeup_id"`
+		ID         string `json:"wakeup_id"`
+		SystemRule string `json:"wakeup_system"`
 	}
 	_ = json.Unmarshal(t.Context, &wakeupContext)
 	handoffNote := ""
@@ -854,6 +871,8 @@ func taskToResponse(t db.AgentTaskQueue, workspaceID string) AgentTaskResponse {
 		TriggerSummary:         textToPtr(t.TriggerSummary),
 		HandoffNote:            handoffNote,
 		WakeupID:               wakeupContext.ID,
+		WakeupSystemRule:       wakeupContext.SystemRule,
+		WakeupJoined:           service.JoinedWakeupNotes(t.Context),
 		WorkDir:                workDir,
 		RelativeWorkDir:        relativeWorkDir(workDir, workspaceID, uuidToString(t.ID)),
 		DurableWorkDir:         durableWorkDir,
@@ -1592,7 +1611,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Warn("create agent failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
-		writeError(w, http.StatusInternalServerError, "failed to create agent: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to create agent")
 		return
 	}
 	if err := replaceInvocationTargetsWithQueries(r.Context(), qtx, created.ID, parseUUID(ownerID), perm.targets); err != nil {
@@ -2243,7 +2262,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Warn("update agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
-		writeError(w, http.StatusInternalServerError, "failed to update agent: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to update agent")
 		return
 	}
 
@@ -2254,7 +2273,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		updated, err = h.Queries.ClearAgentMcpConfig(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent mcp_config failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
-			writeError(w, http.StatusInternalServerError, "failed to clear mcp_config: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to clear mcp_config")
 			return
 		}
 	}
@@ -2262,7 +2281,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		updated, err = h.Queries.ClearAgentThinkingLevel(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent thinking_level failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
-			writeError(w, http.StatusInternalServerError, "failed to clear thinking_level: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to clear thinking_level")
 			return
 		}
 	}
@@ -2270,7 +2289,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		updated, err = h.Queries.ClearAgentServiceTier(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent service_tier failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
-			writeError(w, http.StatusInternalServerError, "failed to clear service_tier: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to clear service_tier")
 			return
 		}
 	}
@@ -2278,7 +2297,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		updated, err = h.Queries.ClearAgentComposioToolkitAllowlist(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent composio_toolkit_allowlist failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
-			writeError(w, http.StatusInternalServerError, "failed to clear composio_toolkit_allowlist: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to clear composio_toolkit_allowlist")
 			return
 		}
 	}
@@ -2289,7 +2308,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if replacePermissionTargets {
 		if err := h.replaceInvocationTargets(r.Context(), updated.ID, parseUUID(requestUserID(r)), resolvedPerm.targets); err != nil {
 			slog.Warn("update agent: persist invocation targets failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
-			writeError(w, http.StatusInternalServerError, "failed to update invocation targets: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to update invocation targets")
 			return
 		}
 	}
@@ -2667,6 +2686,13 @@ func (h *Handler) CancelAgentTasks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cancelAgentTasksResponse{Cancelled: len(cancelled)})
 }
 
+// HeaderAgentTasksNextCursor preserves the array response used by installed clients.
+// An absent header means this is the last page.
+const HeaderAgentTasksNextCursor = "X-Agent-Tasks-Next-Cursor"
+
+const defaultAgentTasksLimit = 200
+const maxAgentTasksLimit = 200
+
 func (h *Handler) ListAgentTasks(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	agent, ok := h.loadAgentForUser(w, r, id)
@@ -2692,13 +2718,41 @@ func (h *Handler) ListAgentTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := h.Queries.ListAgentTasks(r.Context(), agent.ID)
+	limit := defaultAgentTasksLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		limit = min(n, maxAgentTasksLimit)
+	}
+	// An infinite upper bound gives both first and subsequent pages an indexed
+	// tuple comparison, without an optional-cursor OR in the query plan.
+	beforeCreatedAt := pgtype.Timestamptz{InfinityModifier: pgtype.Infinity, Valid: true}
+	beforeID := agent.ID
+	if raw := r.URL.Query().Get("before"); raw != "" {
+		beforeCreatedAt, beforeID = parseTranscriptCursor(raw)
+		if !beforeCreatedAt.Valid || !beforeID.Valid {
+			writeError(w, http.StatusBadRequest, "invalid before cursor")
+			return
+		}
+	}
+	tasks, err := h.Queries.ListAgentTasks(r.Context(), db.ListAgentTasksParams{
+		AgentID: agent.ID, BeforeCreatedAt: beforeCreatedAt, BeforeID: beforeID,
+		PageLimit: int32(limit + 1),
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list agent tasks")
 		return
 	}
 
-	tasks = visibleTaskHistory(tasks)
+	nextCursor := ""
+	if len(tasks) > limit {
+		tasks = tasks[:limit]
+		last := tasks[len(tasks)-1]
+		nextCursor = transcriptCursor(last.CreatedAt.Time, last.ID)
+	}
 	resp := make([]AgentTaskResponse, len(tasks))
 	var taskIDs []pgtype.UUID
 	if includeUsage {
@@ -2720,18 +2774,23 @@ func (h *Handler) ListAgentTasks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if nextCursor != "" {
+		w.Header().Set(HeaderAgentTasksNextCursor, nextCursor)
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // AgentActivityBucket is one day-bucketed throughput sample for the
 // Agents-list ACTIVITY sparkline. bucket_at is midnight UTC of the day.
 type AgentActivityBucket struct {
-	AgentID        string `json:"agent_id"`
-	BucketAt       string `json:"bucket_at"`
-	TaskCount      int32  `json:"task_count"`
-	FailedCount    int32  `json:"failed_count"`
-	CompletedCount int32  `json:"completed_count"`
-	CancelledCount int32  `json:"cancelled_count"`
+	AgentID        string  `json:"agent_id"`
+	BucketAt       string  `json:"bucket_at"`
+	TaskCount      int32   `json:"task_count"`
+	FailedCount    int32   `json:"failed_count"`
+	CompletedCount int32   `json:"completed_count"`
+	CancelledCount int32   `json:"cancelled_count"`
+	DurationMs     float64 `json:"duration_ms"`
+	DurationCount  int32   `json:"duration_count"`
 }
 
 // AgentRunCount is the trailing-30-day total task run count per agent,
@@ -2953,6 +3012,8 @@ func (h *Handler) GetWorkspaceAgentActivity30d(w http.ResponseWriter, r *http.Re
 			FailedCount:    row.FailedCount,
 			CompletedCount: row.CompletedCount,
 			CancelledCount: row.CancelledCount,
+			DurationMs:     row.DurationMs,
+			DurationCount:  row.DurationCount,
 		})
 	}
 

@@ -75,9 +75,7 @@ import { AttachmentDownloadProvider } from "./attachment-download-context";
 import "katex/dist/katex.min.css";
 import "./styles/index.css";
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 /** Canonical comparison form for a markdown string: drop the blank lines a
  *  block leaves behind at either end, so both sides of a dirty check compare
@@ -115,9 +113,7 @@ function hasUploadingNode(editor: Editor): boolean {
   return found;
 }
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 
 interface ContentEditorBaseProps {
   /**
@@ -352,9 +348,7 @@ interface ContentEditorRef {
   adoptContent: (markdown: string) => void;
 }
 
-// ---------------------------------------------------------------------------
 // Component
-// ---------------------------------------------------------------------------
 
 const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
   function ContentEditor(
@@ -904,7 +898,14 @@ const ContentEditor = forwardRef<ContentEditorRef, ContentEditorProps>(
       // than scrubbing it back out afterwards.
       getMarkdown: () => editor?.getMarkdown() ?? "",
       clearContent: () => {
-        editor?.commands.clearContent();
+        if (!editor) return;
+        editor.commands.clearContent();
+        // Clearing maps the selection across the replace, and an
+        // `AllSelection` (a send right after Cmd+A) maps onto itself. A
+        // composer that refocuses after sending would then paint it over the
+        // emptied line as a lone selected space, so park the caret at the
+        // start (0 clamps to the first text position).
+        editor.commands.setTextSelection(0);
       },
       focus: () => {
         if (editor) editor.commands.focus();

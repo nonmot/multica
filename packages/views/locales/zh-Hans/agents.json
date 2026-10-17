@@ -329,6 +329,7 @@
       "setup_description": "该运行时用于创建对话，并默认用于新智能体。",
       "start": "开始对话",
       "connect_runtime": "连接运行时",
+      "draft_parse_failed": "本次回复未能填入表单。请让智能体重新生成草稿，或手动填写。",
       "start_failed": "无法启动智能体构建器。",
       "send_failed": "无法发送消息。",
       "stop_failed": "无法停止当前生成任务。",
@@ -835,6 +836,7 @@
     "status_cancelled": "已取消",
     "status_waiting": "等待中",
     "trigger_initial": "初次运行",
+    "trigger_text": "触发内容",
     "trigger_comment": "评论触发",
     "trigger_autopilot": "自动化",
     "trigger_retry": "重试",
@@ -873,6 +875,7 @@
     "search_placeholder": "搜索这次运行…",
     "no_matches": "没有匹配的步骤。",
     "more_actions": "更多",
+    "kind_text": "智能体",
     "kind_tool": "工具",
     "kind_thinking": "思考",
     "kind_error": "错误",
@@ -891,7 +894,8 @@
     "tool_kind_command": "命令",
     "tool_kind_write": "编辑",
     "tool_kind_read": "读取",
-    "tool_kind_misc": "其他"
+    "tool_kind_misc": "其他",
+    "trigger_wakeup": "唤醒触发"
   },
   "task_failure": {
     "cancelled_by_system": "已由系统取消",
