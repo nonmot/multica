@@ -25,13 +25,17 @@ export interface CliVersionCheck {
 
 const SEMVER_RE = /v?(\d+)\.(\d+)\.(\d+)/;
 
-// Matches the `git describe --tags --always --dirty` output for a build past
-// the latest tag, e.g. `v0.2.15-235-gdaf0e935` or `v0.2.15-235-gdaf0e935-dirty`.
-// Daemons built from source (Makefile `make build` / `make daemon`) report this
-// shape; tagged releases are bare semver. Treating dev-described daemons as OK
-// is what keeps `pnpm dev:desktop` + `make daemon` unblocked without weakening
-// the gate for staging or production users running stale stable releases.
-const DEV_DESCRIBE_RE = /^v?\d+\.\d+\.\d+-\d+-g[0-9a-fA-F]+/;
+// Matches `git describe --tags --always --dirty` output for an untagged or
+// post-tag build:
+//   - `v0.2.15-235-gdaf0e935` / `v0.2.15-235-gdaf0e935-dirty` (standard)
+//   - `0.0.0-gf35d27192` (no tag reachable — git falls back to `g<hash>` only,
+//     and the build script prepends `0.0.0-`)
+// Daemons built from source (Makefile `make build` / `make daemon`) report one
+// of these shapes; tagged releases are bare semver. Treating dev-described
+// daemons as OK is what keeps `pnpm dev:desktop` + `make daemon` unblocked
+// without weakening the gate for staging or production users running stale
+// stable releases.
+const DEV_DESCRIBE_RE = /^v?\d+\.\d+\.\d+-(\d+-)?g[0-9a-fA-F]+/;
 
 function parseSemver(raw: string): [number, number, number] | null {
   const m = SEMVER_RE.exec(raw.trim());
