@@ -77,11 +77,13 @@ var (
 
 // devDescribeRe matches the `git describe --tags --always --dirty` output for
 // a build past the latest tag, e.g. `v0.2.15-235-gdaf0e935` (optionally with a
-// trailing `-dirty`). Daemons built from source (Makefile `make build` / `make
-// daemon`) report this shape; tagged releases are bare semver. Treating dev-
-// described daemons as OK keeps `make daemon` unblocked without weakening the
-// gate for staging or production users running stale stable releases.
-var devDescribeRe = regexp.MustCompile(`^v?\d+\.\d+\.\d+-\d+-g[0-9a-fA-F]+`)
+// trailing `-dirty`), or an untagged build such as `0.0.0-gf35d27192` where git
+// emits only the hash and the commit count is absent. Daemons built from
+// source (Makefile `make build` / `make daemon`) report this shape; tagged
+// releases are bare semver. Treating dev-described daemons as OK keeps `make
+// daemon` unblocked without weakening the gate for staging or production
+// users running stale stable releases.
+var devDescribeRe = regexp.MustCompile(`^v?\d+\.\d+\.\d+-(\d+-)?g[0-9a-fA-F]+`)
 
 // CheckMinCLIVersion returns nil when `detected` parses as ≥ minimum. Returns
 // ErrCLIVersionMissing for empty or unparsable input, and ErrCLIVersionTooOld
