@@ -28,6 +28,10 @@ describe("checkQuickCreateCliVersion", () => {
     expect(checkQuickCreateCliVersion("v0.2.15-235-gdaf0e935").state).toBe("ok");
     expect(checkQuickCreateCliVersion("v0.2.15-235-gdaf0e935-dirty").state).toBe("ok");
     expect(checkQuickCreateCliVersion("0.1.0-1-gabc1234").state).toBe("ok");
+    // no-tag build: `git describe --always` produces just the hash; build script
+    // prepends `0.0.0-` — e.g. `0.0.0-gf35d27192` (MYP-419)
+    expect(checkQuickCreateCliVersion("0.0.0-gf35d27192").state).toBe("ok");
+    expect(checkQuickCreateCliVersion("v0.0.0-gf35d27192").state).toBe("ok");
   });
 });
 
@@ -61,6 +65,8 @@ describe("chatProjectContextSupported", () => {
   it("treats git-describe dev builds as supported regardless of base tag", () => {
     expect(chatProjectContextSupported("v0.4.8-37-g5d0275d68")).toBe(true);
     expect(chatProjectContextSupported("v0.1.0-235-gdaf0e935-dirty")).toBe(true);
+    // no-tag build (MYP-419)
+    expect(chatProjectContextSupported("0.0.0-gf35d27192")).toBe(true);
   });
 });
 
